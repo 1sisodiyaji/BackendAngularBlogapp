@@ -10,7 +10,7 @@ const jwt = require("jsonwebtoken");
 // Multer storage configuration
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, path.join(__dirname, "../../src/assets/user/"));
+        cb(null, path.join(__dirname, "https://angularblog-a72t4zv2i-1sisodiyajis-projects.vercel.app/assets/user/"));
     },
     filename: (req, file, cb) => {
         const ext = path.extname(file.originalname);

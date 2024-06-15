@@ -10,7 +10,7 @@ const jwt = require("jsonwebtoken");
 // Multer storage configuration
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, path.join(__dirname, "../../src/assets/user"));
+        cb(null, path.join(__dirname, "../../src/assets/user/"));
     },
     filename: (req, file, cb) => {
         const ext = path.extname(file.originalname);
@@ -39,9 +39,7 @@ router.post("/register", upload.single("image"), async (req, res) => {
         const image = req.file ? req.file.filename : "default.jpg";
 
         if (!name || !lastname || !email || !password || !about) {
-            return res
-                .status(400)
-                .json({ message: "Please fill in all required fields" });
+          return  res.status(400).json({ message: 'Please fill data' });
         }
 
         // Generate username
@@ -52,9 +50,7 @@ router.post("/register", upload.single("image"), async (req, res) => {
         let user = await User.findOne({ email });
 
         if (user) {
-            return res
-                .status(409)
-                .json({ message: "User with this email already exists" });
+            return res.status(409).json({ message: 'User with this email already exists' }); 
         }
 
         // Create a new user instance
@@ -73,20 +69,15 @@ router.post("/register", upload.single("image"), async (req, res) => {
 
         if (savedUser) {
             console.log("Your data is saved");
-            return res
-                .status(201)
-                .json({ message: "Your account is created successfully" });
+            return res.status(201).json({ message: 'Your account is created successfully' });
+            
         } else {
             console.log("Your data is not saved");
-            return res
-                .status(500)
-                .json({ message: "Registration failed. Please try again later." });
+            return res.status(500).json({ message: "Registration failed. Please try again later."  }); 
         }
     } catch (error) {
         console.error(error);
-        return res
-            .status(500)
-            .json({ error: "Registration failed. Please try again later." });
+        return res.status(500).json({ message:  "Registration failed. Please try again later." });  
     }
 });
 
@@ -150,32 +141,35 @@ router.get("/getbyid/:id", async (req, res) => {
         const user = await User.findById(req.params.id);
 
         if (!user) {
-            return res.status(404).send("User not found");
+            return  res.status(404).json({ message: 'User not found' });
         }
-
-        res.status(200).json(user);
+        console.log(user);
+        return  res.status(200).json(user);
     } catch (err) {
         console.error("Failed to fetch user:", err.message);
-        res.status(500).send("Failed to fetch user");
+        return  res.status(500).json({ message: 'Failed to fetch user' });
     }
 });
 
-router.delete("/delete/:id", async (req, res) => {
+router.delete("/delete/:id", async (req, res) => { 
+    console.log("delete id" + req.params.id);
     try {
         const deleteUser = await User.findByIdAndDelete(req.params.id);
 
-        if (!deleteUser) {
-            return res.status(404).send("User not found");
+        if (!deleteUser) { 
+            return  res.status(404).json({ message: 'User not found' });
         }
-
-        res.status(200).send("User deleted successfully");
+ 
+        return  res.status(200).json({ message: 'User deleted successfully' });
     } catch (err) {
-        console.error("Failed to delete User:", err.message);
-        res.status(500).send("Failed to delete User");
+        console.error("Failed to delete User:", err.message); 
+        return  res.status(500).json({ message: 'Failed to delete User' });
     }
 });
 
 router.put("/update/:id", upload.single("image"), async (req, res) => {
+
+    console.log(req.body);
     try {
         const { username, email, password } = req.body;
 

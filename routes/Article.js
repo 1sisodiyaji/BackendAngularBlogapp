@@ -7,7 +7,7 @@ const path = require('path');
 let filename = '';
 const myStorage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, path.join(__dirname, '../../src/assets/article'));
+        cb(null, path.join(__dirname, 'https://angularblog-a72t4zv2i-1sisodiyajis-projects.vercel.app/assets/article/'));
     },
     filename: (req, file, cb) => {
         let date = Date.now();
@@ -16,6 +16,7 @@ const myStorage = multer.diskStorage({
         filename = f1;
     }
 });
+
 const upload = multer({ storage: myStorage });
 
 
@@ -95,17 +96,20 @@ router.get('/getbyidAuthor/:id', async (req, res) => {
 });
 
 router.delete('/delete/:id', async (req, res) => {
+    console.log(req.params.id);
+    console.log("deleted profile section ");
     try {
         const deletedArticle = await Article.findByIdAndDelete(req.params.id);
         
-        if (!deletedArticle) {
-            return res.status(404).send("Article not found");
+        if (!deletedArticle) { 
+            return  res.status(404).json({ message: 'Article not found' });
+        }else{
+            console.log("article deleted successfully");
+            return  res.status(200).json({ message: 'Article deleted successfully' });
         }
-
-        res.status(200).send("Article deleted successfully");
     } catch (err) {
-        console.error("Failed to delete article:", err.message);
-        res.status(500).send("Failed to delete article");
+        console.error("Failed to delete article:", err.message); 
+        return  res.status(500).json({ message: 'Failed to delete article' });
     }
 });
 router.put('/update/:id', upload.single('image'), async (req, res) => {

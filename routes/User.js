@@ -1,200 +1,186 @@
 const express = require("express");
 const router = express.Router();
 const User = require("../models/User");
-const bcrypt = require("bcrypt");
-const multer = require("multer");
-const path = require("path");
+const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const multer = require('multer');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinary = require('cloudinary').v2;
 
 
-// Multer storage configuration
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, path.join(__dirname, "https://angularblog-a72t4zv2i-1sisodiyajis-projects.vercel.app/assets/user/"));
-    },
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        cb(null, file.fieldname + "-" + Date.now() + ext);
-    },
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Multer upload instance
-const upload = multer({
-    storage: storage,
-    limits: { fileSize: 1024 * 1024 * 5 }, // Limit file size to 5MB
-    fileFilter: (req, file, cb) => {
-        if (file.mimetype.startsWith("image/")) {
-            cb(null, true);
-        } else {
-            cb(new Error("Only image files are allowed"));
-        }
-    },
+// Set up multer and cloudinary storage
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'blog-app', // Folder name on Cloudinary
+    format: async (req, file) => 'jpg', // supports promises as well
+    public_id: (req, file) => file.fieldname + '-' + Date.now(),
+  },
 });
+const parser = multer({ storage: storage });
 
-function generateUsername(name) { }
-// Register a new user with profile image uploadconst checkRequiredFields = (req, res) => {
-router.post("/register", upload.single("image"), async (req, res) => {
-    try {
-        const { name, lastname, email, password, about } = req.body;
-        const image = req.file ? req.file.filename : "default.jpg";
 
-        if (!name || !lastname || !email || !password || !about) {
-          return  res.status(400).json({ message: 'Please fill data' });
-        }
+router.post("/register", parser.single('image'), async (req, res) => {
+  const { name, email, password, about } = req.body;
+  const image = req.file ? req.file.path : 'default.jpg';
+  if (!name || !email || !password || !image || !about) {
+    return res.status(401).json({ message: "Please fill the data" });
+  }
 
-        // Generate username
-        const randomDigits = Math.floor(100 + Math.random() * 900);
-        const username = `${name}@${randomDigits}`;
-
-        // Check if the email already exists
-        let user = await User.findOne({ email });
-
-        if (user) {
-            return res.status(409).json({ message: 'User with this email already exists' }); 
-        }
-
-        // Create a new user instance
-        user = new User({
-            name,
-            lastname,
-            username,
-            email,
-            password,
-            image,
-            about,
-        });
-
-        // Save the user to the database
-        const savedUser = await user.save();
-
-        if (savedUser) {
-            console.log("Your data is saved");
-            return res.status(201).json({ message: 'Your account is created successfully' });
-            
-        } else {
-            console.log("Your data is not saved");
-            return res.status(500).json({ message: "Registration failed. Please try again later."  }); 
-        }
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message:  "Registration failed. Please try again later." });  
+  try {
+    const user = await User.findOne({ email });
+    if (user) {
+      return res.status(404).json({ message: "User already exist" });
     }
+
+    const hashPassword = await bcrypt.hash(password, 10);
+    const formattedName = name.replace(/\s+/g, "_").toLowerCase();
+    const randomNumber = Math.floor(Math.random() * 90) + 10;
+    const username = `@${formattedName}${randomNumber}`;
+    const newUser = new User({
+      name,
+      email,
+      password: hashPassword,
+      username,
+      image,
+      about,
+    });
+    const savedUser = await newUser.save().catch((error) => {
+      console.error("Error saving user to database:", error);
+      throw error;
+    });
+    const token = jwt.sign(
+      { userId: savedUser._id, email: savedUser.email },
+      process.env.JWT_SECRET_KEY,
+      {
+        expiresIn: "1y", // Token expiration time
+      }
+    );
+
+
+    // Set the token in a cookie
+    res.cookie("token", token, {
+      maxAge: 365 * 24 * 60 * 60 * 1000,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+    });
+
+    return res.status(200).json({ message: "Registration successful", token });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Account creation Failed" });
+  }
 });
 
-// Login a user
 router.post("/login", async (req, res) => {
-    try {
-        const { email, password } = req.body;
-
-        if (!email || !password) {
-            return res
-                .status(401)
-                .json({ message: "Please fill in all required fields" });
-        }
-
-        // Check if the user exists
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res
-                .status(400)
-                .json({ message: "User does not exist. Please create an account" });
-        }
-
-        // Compare passwords
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(400).json({ message: "Invalid credentials" });
-        }
-
-        // Generate a JWT token
-        const token = jwt.sign(
-            { id: user._id, email: user.email },
-            process.env.JWT_SECRET,
-            { expiresIn: "24h" }
-        );
-
-        // Return the token and user details
-        console.log(token,user);
-        res.json({
-            token,
-            user: { id: user._id, username: user.username, email: user.email },
-        });
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({ error: error.message });
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.json({
+      status: "error",
+      message: "Please fill the data Correctly.",
+    });
+  }
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(401).json({ message: "Account does not exist" });
     }
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(409).json({ message: "Invalid password" });
+
+    }
+    const token = jwt.sign(
+      { userId: user._id, email: user.email },
+      process.env.JWT_SECRET_KEY,
+      {
+        expiresIn: "1y", // Token expiration time
+      }
+    );
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      maxAge: 365 * 24 * 60 * 60 * 1000,
+    });
+    return res.status(200).json({ message: "Login Suucess", token });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Login Failed" });
+  }
 });
 
 router.get("/all", async (req, res) => {
-    try {
-        const users = await User.find();
-        res.status(200).json(users);
-    } catch (err) {
-        console.error("Failed to fetch users:", err.message);
-        res.status(500).send("Failed to fetch users");
-    }
+  try {
+    const users = await User.find();
+    res.status(200).json(users);
+  } catch (err) {
+    console.error("Failed to fetch users:", err.message);
+    res.status(500).send("Failed to fetch users");
+  }
 });
 
 router.get("/getbyid/:id", async (req, res) => {
-    console.log(req.params.id);
-    try {
-        const user = await User.findById(req.params.id);
+  console.log(req.params.id);
+  try {
+    const user = await User.findById(req.params.id);
 
-        if (!user) {
-            return  res.status(404).json({ message: 'User not found' });
-        }
-        console.log(user);
-        return  res.status(200).json(user);
-    } catch (err) {
-        console.error("Failed to fetch user:", err.message);
-        return  res.status(500).json({ message: 'Failed to fetch user' });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
     }
+    console.log(user);
+    return res.status(200).json(user);
+  } catch (err) {
+    console.error("Failed to fetch user:", err.message);
+    return res.status(500).json({ message: "Failed to fetch user" });
+  }
 });
 
-router.delete("/delete/:id", async (req, res) => { 
-    console.log("delete id" + req.params.id);
-    try {
-        const deleteUser = await User.findByIdAndDelete(req.params.id);
+router.delete("/delete/:id", async (req, res) => {
+  console.log("delete id" + req.params.id);
+  try {
+    const deleteUser = await User.findByIdAndDelete(req.params.id);
 
-        if (!deleteUser) { 
-            return  res.status(404).json({ message: 'User not found' });
-        }
- 
-        return  res.status(200).json({ message: 'User deleted successfully' });
-    } catch (err) {
-        console.error("Failed to delete User:", err.message); 
-        return  res.status(500).json({ message: 'Failed to delete User' });
+    if (!deleteUser) {
+      return res.status(404).json({ message: "User not found" });
     }
+
+    return res.status(200).json({ message: "User deleted successfully" });
+  } catch (err) {
+    console.error("Failed to delete User:", err.message);
+    return res.status(500).json({ message: "Failed to delete User" });
+  }
 });
 
-router.put("/update/:id", upload.single("image"), async (req, res) => {
-
-    console.log(req.body);
+router.put("/update/:id", parser.single('image'), async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    return res.status(404).send("User not found");
+  } else {
     try {
-        const { username, email, password } = req.body;
+      const image = req.file ? req.file.path : 'default.jpg';
+      const { name, about } = req.body;
+      if (name) user.name = name;
+      if (about) user.about = about;
 
-        const user = await User.findById(req.params.id);
-        if (!user) {
-            return res.status(404).send("User not found");
-        }
+      if (req.file) {
+        user.image = image;
+      }
 
-        // Update only the fields that are provided in the request body
-        if (username) user.username = username;
-        if (email) user.email = email;
-        if (password) user.password = password; // This will be hashed by the pre-save middleware
-
-        // Handle image upload if a file is provided
-        if (req.file) {
-            user.image = req.file.filename; // Assuming multer has saved the file
-        }
-
-        const updatedUser = await user.save();
-
-        res.status(200).json(updatedUser);
+      const updatedUser = await user.save();
+      res.status(200).json(updatedUser);
     } catch (err) {
-        console.error("Failed to update user:", err.message);
-        res.status(500).send("Failed to update user");
+      console.error("Failed to update user:", err.message);
+      res.status(500).send("Failed to update user");
     }
+  }
 });
+
+
 
 module.exports = router;

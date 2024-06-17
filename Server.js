@@ -10,6 +10,7 @@ const nodemailer = require('nodemailer');
 
 app.use(cors());
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.json());
 
 // Use the Article API routes
@@ -29,6 +30,7 @@ app.listen(PORT, () => {
 });
 
 
+//mail system 
 app.post('/send-email', async (req, res) => {
     const { to, subject, message } = req.body;
   
@@ -57,4 +59,4 @@ app.post('/send-email', async (req, res) => {
       res.status(500).json({ error: 'Error sending email' });
     }
     
-  });
+});

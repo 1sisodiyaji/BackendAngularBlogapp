@@ -1,23 +1,14 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
 
 const UserSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
-    trim: true,
-  },
-  lastname: {
-    type: String,
-    required: true,
-    minlength: 1,
-    trim: true,
   },
   username: {
     type: String,
     required: true,
-    trim: true,
-    unique: true,
+    trim: true, 
   },
   email: {
     type: String,
@@ -32,28 +23,21 @@ const UserSchema = new mongoose.Schema({
     minlength: 4,
   },
   image: {
-    type: String, // Store the path or URL of the uploaded image
-    default: 'default.jpg', // Default image path or URL
+    type: String,
+    default: 'default.jpg',
   },
-  created_at: {
+  createdAt: {
     type: Date,
     default: Date.now,
   },
-  about:{
-    type: String,  
+  about: {
+    type: String,
     trim: true,
-    default: "I'm a new user"
-  }
+    default: "I'm a new user",
+  },
 });
-
-// Hash the password before saving the user model
-UserSchema.pre('save', async function (next) {
-  if (this.isModified('password') || this.isNew) {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-  }
-  next();
-});
+ 
+UserSchema.index({ username: 1, email: 1 }, { unique: true });  
 
 const User = mongoose.model('User', UserSchema);
 

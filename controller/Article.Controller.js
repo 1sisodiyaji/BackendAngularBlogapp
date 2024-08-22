@@ -128,44 +128,56 @@ exports.DeleteBlog =  async (req, res) => {
         return  res.status(500).json({ message: 'Failed to delete article' });
     }
 };
-exports.UpdateBlog = [parser.single('image'), async (req, res) => {
+exports.UpdateBlog = async (req, res) => {
     const userId = req.userId;
     const id = req.params.id;
-    if(!id || !userId) {
-        return res.status(400).send("Please provide an id"); 
+
+    if (!id || !userId) {
+        return res.status(400).send("Please provide an ID");
     }
 
-    const article = await findById(id);
-    if(!article) {
-        return res.status(404).send("Article not found");
-    }
-
-    if ( article.idAuthor.toString()!== userId) {
-        return res.status(401).send("Unauthorized to delete this article");
-    }
     try {
-        const { title, description, content, tags } = req.body;
-
         const article = await Article.findById(id);
         if (!article) {
             return res.status(404).send("Article not found");
         }
 
-        // Update only the fields that are provided in the request body
-        if (title){
-             article.title = title;
-             article.slug = slugify(title, {
-                lower: true,    
-                strict: true
-              });
+        if (article.idAuthor.toString() !== userId) {
+            return res.status(401).send("Unauthorized to update this article");
         }
-        if (description) article.description = description;
-        if (content) article.content = content;
-        if (tags) article.tags = tags.split(',');
 
-        // Handle image upload if a file is provided
-        if (req.file) {
-            article.image = req.file.filename; // Assuming multer has saved the file
+        const { title, description, content, tags: rawTags, image } = req.body;
+
+        // Update only the fields that are provided in the request body
+        if (title) {
+            article.title = title.trim();
+            article.slug = slugify(title, {
+                lower: true,
+                strict: true
+            });
+        }
+        if (description) article.description = description.trim();
+        if (content) article.content = content.trim();
+
+        let tags = [];
+        if (rawTags) {
+            try {
+                tags = typeof rawTags === 'string' ? JSON.parse(rawTags) : rawTags;
+                article.tags = Array.isArray(tags) ? tags : [];
+            } catch (err) {
+                return res.status(400).json({ message: "Tags must be a valid JSON array." });
+            }
+        }
+
+        // Handle image upload if provided
+        if (image) {
+            try {
+                const uploadResult = await cloudinary.uploader.upload(image);
+                article.image = uploadResult.secure_url;
+            } catch (error) {
+                console.error("Cloudinary upload error:", error);
+                return res.status(500).json({ message: "Failed to upload image", error: error.message });
+            }
         }
 
         const updatedArticle = await article.save();
@@ -175,4 +187,35 @@ exports.UpdateBlog = [parser.single('image'), async (req, res) => {
         console.error("Failed to update article:", err.message);
         res.status(500).send("Failed to update article");
     }
-}];
+};
+exports.getByuserId = async (req, res) => { 
+   
+    const id = req.params.id; 
+    
+    try { 
+        const articles = await Article.find({ idAuthor: id }).populate('idAuthor', 'slug name');;
+        
+        if (articles.length === 0) {
+            return res.status(404).send("No articles found for this author");
+        } 
+        res.status(200).json(articles);
+    } catch (err) {
+        console.error("Failed to fetch articles by author:", err.message);
+        res.status(500).send("Failed to fetch articles by author");
+    }
+};
+exports.getById = async (req, res) => { 
+   
+    const id = req.params.id; 
+    
+    try { 
+        const articles = await Article.findById(id).populate('idAuthor', 'slug name');
+        if (articles.length === 0) {
+            return res.status(404).send("No articles found for this author");
+        } 
+        res.status(200).json(articles);
+    } catch (err) {
+        console.error("Failed to fetch articles by author:", err.message);
+        res.status(500).send("Failed to fetch articles by author");
+    }
+};

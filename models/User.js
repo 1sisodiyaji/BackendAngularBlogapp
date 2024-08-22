@@ -5,10 +5,9 @@ const UserSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  username: {
+  slug:{
     type: String,
     required: true,
-    trim: true, 
   },
   email: {
     type: String,
@@ -18,26 +17,17 @@ const UserSchema = new mongoose.Schema({
     unique: true,
   },
   password: {
-    type: String,
-    required: true,
-    minlength: 4,
+    type: String,  
   },
   image: {
     type: String,
-    default: 'default.jpg',
+    default: 'https://res.cloudinary.com/dbqq41bpc/image/upload/v1718616387/blog-app/image-1718616385884.jpg',
   },
   createdAt: {
     type: Date,
     default: Date.now,
-  },
-  about: {
-    type: String,
-    trim: true,
-    default: "I'm a new user",
-  },
-});
- 
-UserSchema.index({ username: 1, email: 1 }, { unique: true });  
+  }
+}); 
 
 const User = mongoose.model('User', UserSchema);
 

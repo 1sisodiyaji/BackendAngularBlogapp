@@ -7,17 +7,17 @@ const app = express();
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const nodemailer = require('nodemailer');
+const cookieParser = require('cookie-parser');
 
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.json());
-
-// Use the Article API routes
+app.use(express.json()); 
+app.use(cookieParser());
+ 
 app.use('/articles', ArticleApi);
 app.use('/user', UserApi);
-
-// Basic error handling middleware
+ 
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).send('Something went wrong!');
@@ -39,13 +39,13 @@ app.post('/send-email', async (req, res) => {
         port: 465,
         secure: true,
         auth: {
-            user: '637golusingh@gmail.com',
-            pass: 'tdmudhwlrtonzmby',
+            user: process.env.USEREMAIL,
+            pass: process.env.USER_APP_PASSWEORD,
         },
     });
   
     const mailOptions = {
-      from: '637golusingh@gmail.com', // Sender address
+      from: process.env.USEREMAIL,
       to: to,
       subject: subject,
       text: message

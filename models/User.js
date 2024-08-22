@@ -19,6 +19,9 @@ const UserSchema = new mongoose.Schema({
   password: {
     type: String,  
   },
+  otp: {
+    type: String,  
+  },
   image: {
     type: String,
     default: 'https://res.cloudinary.com/dbqq41bpc/image/upload/v1718616387/blog-app/image-1718616385884.jpg',

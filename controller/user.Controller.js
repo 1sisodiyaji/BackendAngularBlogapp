@@ -3,6 +3,7 @@ const { parser } = require("../config/Cloudinary");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const slugify = require("slugify");
+const sendEmail = require("../config/Mail");
 
 exports.Register =  [parser.single('image'), async (req, res) => {
     const { name, email, password } = req.body;
@@ -32,7 +33,7 @@ exports.Register =  [parser.single('image'), async (req, res) => {
         throw error;
       });
       const token = jwt.sign(
-        { userId: savedUser._id },
+        { id: savedUser._id },
             process.env.JWT_SECRET_KEY,
         {
           expiresIn: "1y",
@@ -63,7 +64,7 @@ exports.Login =  async (req, res) => {
   
       }
       const token = jwt.sign(
-        { userId: user._id},
+        { id: user._id},
         process.env.JWT_SECRET_KEY,
         {
           expiresIn: "1y",
@@ -215,3 +216,105 @@ exports.UserUpdate =  async (req, res) => {
       }
     }
 };
+
+
+exports.sendemail =  async (req, res) => {
+  const { email } = req.body; 
+  
+  if (!email) {
+    return res.status(400).json({
+      status: "error",
+      message: "Email is required.",
+    });
+  } 
+  const otp = Math.floor(100000 + Math.random() * 900000);  
+  try {
+    const isValidUser = await User.findOne({ email: email });
+
+    if (!isValidUser) {
+      return res
+        .status(404)
+        .json({ status: "error", message: "User not found. Please create your account" });
+    }
+
+    const filter = { email: email };
+    const update = { otp: otp };
+    const options = {
+      new: true,
+      upsert: true,
+    };
+
+    const updatedUser = await User.findOneAndUpdate(filter, update, options);
+
+    if (!updatedUser) {
+      return res
+        .status(500)
+        .json({ status: "error", message: "Failed to update user with OTP." });
+    }  
+     const sended =  await sendEmail(email , "VERIFY" , otp);
+
+     if(!sended) {
+      return res.json({ status: "error", message: "Failed to send OTP email." });
+    }
+
+    return res .status(200) .json({ status: "success", message: "OTP sent successfully." });
+  } catch (error) {
+    console.error("Error sending OTP email:", error.message);
+    return res
+      .status(500)
+      .json({ status: "error", message: "Internal Server Error" });
+  }
+}
+
+exports.verifyOtp =  async (req, res) => {
+  const { otp } = req.body;
+  const { email } = req.body; 
+  if (!email || !otp) {
+    return res.json({ status: "error", message: "Please fill the otp." });
+  } else { 
+    const otpCheck = await User.findOne({ email }); 
+    if (otpCheck) {
+      if (otpCheck.otp == otp) {
+        return res.json({
+          status: "success",
+          message: "OTP verified successfully.",
+        });
+      } else {
+        return res.json({ status: "error", message: "OTP not verified." });
+      }
+    } else {
+      return res.json({
+        status: "error",
+        message: " User does not exist , Please register.",
+      });
+    }
+  }
+}
+exports.updatePassword = async (req, res) => {
+  const { password, email } = req.body; 
+  if (!password || !email) {
+    return res.json({ status: "error", message: "Please fill the password." });
+  } 
+  try {
+    hashedPssword = await bcrypt.hash(password, 10);
+    const user = await User.findOneAndUpdate(
+      { email },
+      { password: hashedPssword },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.json({ status: "error", message: "User not found." });
+    }
+    return res.json({
+      status: "success",
+      message: "Password updated successfully.",
+    });
+  } catch (error) {
+    console.error("Error updating password:", error.message);
+    return res.json({ status: "error", message: "Internal Server Error" });
+  }
+};
+
+
+
